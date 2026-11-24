@@ -41,6 +41,41 @@ Tulsky et al. (2013) found that carried zone entries produce more than twice the
 
 - Teams are anonymised. Event coordinates run x ∈ [−100, 100], y ∈ [−42.5, 42.5] (feet).
 
+## How to run
+
+Python 3.10+ with numpy, pandas, scikit-learn and matplotlib (`pip install -r requirements.txt`). From the repo root:
+
+```
+python code/tests.py                                                # 10 tests, ~10 s
+python code/build_entries.py data/raw data/processed/entries.csv    # 1,748 entries, a few seconds
+python code/analyze.py data/processed/entries.csv output 1000       # midway results + figures, ~1 min
+```
+
+| File | What it does |
+|---|---|
+| `code/build_entries.py` | Main pipeline, step 1: raw events + shifts -> one row per carried or dumped entry |
+| `code/analyze.py` | Main pipeline, step 2: raw gap, cross-fitted propensity and trimming, interacted regression (ATE), game bootstrap, leave-one-game-out, balance, placebo, figures |
+| `code/wrangle.py` | Event-level cleaner (coordinates rotated to the attacking direction) for later tracking / xG / zone-exit work, and an independent second entry builder |
+| `code/tests.py` | Known-answer tests on small hand-built inputs, plus a check that the two entry builders agree on every real entry |
+
+`analyze.py` writes `output/results_table.csv`, `summary.json`, `per_game.csv`, `leave_one_game_out.csv`, `balance.csv`, `fig_overlap.png` and `fig_estimates.png`. A fresh run reproduces the midway table above exactly.
+
+**Sensitivity placebo.** `y_pre_own` counts only the entering team's shots in the 20 s before the entry. Its adjusted estimate is −0.03 [−0.07, 0.01] (500 game resamples, reported in `summary.json`). So carries do not follow more shooting by the team that carries; if anything, they follow slightly less.
+
+## Wrangling decisions
+
+- **Outcome (`y`).** The entering team's shot attempts in the 20 s after the entry. That means `Shot` rows (on net, missed or blocked) plus `Goal` rows, which are a separate event in these files. The count stops at the next zone entry by either team, the next faceoff, or the end of the period, so a shot is never credited to two entries. Without the stop rule the means would be 0.72 vs 0.33.
+- **Placebo (`y_pre`).** Shot attempts by either team in the 20 s before the entry, same period, no stop rule. This is the version used in the midway slides.
+- **Event order.** About 4,900 events share a clock second, so both builders walk the raw file in row order rather than sorting by clock.
+- **Teams.** The Cup anonymises teams per competition, so teams are prefixed with the season (`2025:Team D` and `2026:Team D` are different teams).
+- **Covariates** (measured at or before the entry): seconds elapsed in the period, skater difference and an even-strength flag, score difference (clipped at ±2), |y| at the entry (distance from the middle of the ice), seconds since the last faceoff, mean seconds into the current shift for the entering team's skaters on the ice (median plus a missing flag when no shift matches), home, period (OT separate), and team.
+- **Two independent builders agree.** `build_entries.py` (Graham) and `wrangle.py` (Alec) were written separately and give the same carry label, outcome, own-team placebo, time since faceoff and |y| for all 1,748 entries (`tests.py`).
+- **Known data quirks:**
+  - In periods 1–3 the raw x, y are absolute rink coordinates and teams switch ends each period. In overtime the raw file already records each event in the acting team's own attacking direction. This matters only for covariates that use signed x or y; `wrangle.py` handles it.
+  - 16 entries have no player logged.
+  - 5 dumped entries in the 2026 Team G @ Team L game are logged near centre ice (|x| < 20) rather than at the blue line. Check this before using entry location beyond |y|.
+- **Balance note.** After inverse-probability weighting, the home/away imbalance gets larger (SMD −0.06 → 0.15; `output/balance.csv`). The interacted regression adjusts for home directly, but this is worth a line in the report.
+
 ## References
 
 - Tulsky, E., Detweiler, G., Spencer, R., & Sznajder, C. (2013). *Using zone entry data to separate offensive, neutral, and defensive zone performance.* MIT Sloan Sports Analytics Conference.

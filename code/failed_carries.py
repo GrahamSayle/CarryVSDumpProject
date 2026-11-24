@@ -26,7 +26,10 @@ from build_entries import clock_to_sec
 
 
 def game_id(ev_path, release):
-    return f"{release}:{os.path.basename(ev_path).split('.Events')[0].split('.-.')[0][5:]}"
+    """Same label as build_entries.py (must match: analyze_final.py joins on it)."""
+    stem = os.path.basename(ev_path).split(".Events")[0]
+    stem = stem[:-2] if stem.endswith(".-") else stem
+    return f"{release}:{stem[5:]}"
 
 
 def failed_carry_proxy(ev_path, release, lo=10.0, window=20, broad=False):

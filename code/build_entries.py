@@ -4,6 +4,7 @@ One row per carried or dumped zone entry, with:
   outcome   y         shot attempts (Shot or Goal events) by the entering team within WINDOW s,
                       stopping early at the next zone entry, faceoff or period end
   placebo   y_pre     shot attempts by either team in the WINDOW s before the entry (same period)
+            y_pre_own same, entering team only (sensitivity check)
   treatment carry     1 = carried, 0 = dumped ("Played" entries are excluded)
   covariates          game situation measured at or before the entry
 
@@ -43,7 +44,10 @@ def mean_shift_time(shifts, team, period, t):
 def build_game(ev_path, sh_path, release, window):
     ev = pd.read_csv(ev_path, encoding="utf-8-sig")
     sh = load_shifts(sh_path)
-    game = f"{release}:{os.path.basename(ev_path).split('.Events')[0].split('.-.')[0][5:]}"
+    # 2025 file names end in ".-.Events.csv", 2026 in ".Events.csv"; strip both forms
+    stem = os.path.basename(ev_path).split(".Events")[0]
+    stem = stem[:-2] if stem.endswith(".-") else stem
+    game = f"{release}:{stem[5:]}"
     ev["t"] = ev["Clock"].map(clock_to_sec)
     ev["Period"] = ev["Period"].astype(int)
     rows = []
@@ -72,15 +76,17 @@ def build_game(ev_path, sh_path, release, window):
                 y += 1
         # placebo: shot attempts by either team in the `window` seconds before
         y_pre = 0
+        y_pre_own = 0   # sensitivity: entering team's shots only, same window
         for r2 in reversed(recs[:i]):
             if r2["Period"] != p or r2["t"] - t0 > window:
                 break
             if r2["Event"] in ("Shot", "Goal"):
                 y_pre += 1
+                y_pre_own += int(r2["Team"] == team)
 
         rows.append(dict(
             game=game, release=release, team=f"{release}:{team}",
-            carry=int(r["Detail_1"] == "Carried"), y=y, y_pre=y_pre,
+            carry=int(r["Detail_1"] == "Carried"), y=y, y_pre=y_pre, y_pre_own=y_pre_own,
             period=min(p, 4), period_elapsed=1200 - t0 if p <= 3 else 300 - t0,
             home=home, skater_diff=sk_for - sk_against,
             even_strength=int(sk_for == sk_against),
@@ -101,6 +107,7 @@ def main(raw_dir, out_csv, window=20):
     df = pd.DataFrame(rows)
     df["shift_time_missing"] = df.shift_time.isna().astype(int)
     df["shift_time"] = df.shift_time.fillna(df.shift_time.median())
+    os.makedirs(os.path.dirname(out_csv) or ".", exist_ok=True)
     df.to_csv(out_csv, index=False)
     print(f"{len(df)} entries ({df.carry.sum()} carried, {(1 - df.carry).sum()} dumped) "
           f"from {df.game.nunique()} games -> {out_csv}")
