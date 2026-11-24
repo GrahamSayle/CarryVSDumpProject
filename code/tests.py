@@ -169,6 +169,90 @@ def test_wrangle_window_counts():
 
 
 # ---------------------------------------------------------------------------
+# xg_features.py (shared MoneyPuck / BDC shot features)
+# ---------------------------------------------------------------------------
+
+import xg_features as xg  # noqa: E402
+
+
+def test_xg_geometry_matches_moneypuck_rows():
+    # (xCordAdjusted, yCordAdjusted) -> shotDistance / shotAngle copied from real
+    # 2024-25 MoneyPuck rows, including two shots from behind the net (x > 89).
+    assert abs(xg.shot_distance(57, -40) - 51.2249938995) < 1e-8
+    assert abs(xg.shot_distance(71, -28) - 33.2866339542) < 1e-8
+    assert abs(xg.shot_angle(96, 11) - 57.5288077092) < 1e-8
+    assert abs(xg.shot_angle(93, -26) - (-81.2538377374)) < 1e-8
+    assert abs(xg.shot_angle(90, 6) - 80.537677792) < 1e-8
+    assert xg.shot_angle(89, 5) == 90.0 and xg.shot_angle(60, 0) == 0.0
+
+
+def test_xg_moneypuck_features_toy_row():
+    mp = pd.DataFrame([{
+        "season": 2024, "game_id": 20001, "period": 2, "time": 1500, "isHomeTeam": 0,
+        "event": "SHOT", "goal": 0, "xCordAdjusted": 96, "yCordAdjusted": 11, "shotType": "BACK",
+        "homeSkatersOnIce": 4, "awaySkatersOnIce": 5, "homeTeamGoals": 2, "awayTeamGoals": 1,
+        "timeSinceFaceoff": 30, "shooterTimeOnIce": 20,
+        "shootingTeamAverageTimeOnIce": 25.0, "shootingTeamMinTimeOnIce": 10, "shootingTeamMaxTimeOnIce": 40,
+        "defendingTeamAverageTimeOnIce": 30.0, "defendingTeamMinTimeOnIce": 999, "defendingTeamMaxTimeOnIce": 0,
+        "shotRebound": 1, "lastEventShotAngle": 11.309932474, "xGoal": 0.05, "shotOnEmptyNet": 0,
+    }])
+    f = xg.moneypuck_features(mp).iloc[0]
+    assert (f["skaters_for"], f["skaters_against"], f["score_diff"]) == (5, 4, -1)  # away team shooting
+    assert f["shot_group"] == "wrist_snap" and f["is_home"] == 0
+    assert abs(f["rebound_angle_change"] - 46.2188752351) < 1e-8  # matches the file's value for this row
+    assert np.isnan(f["def_toi_min"]) and np.isnan(f["toi_min_diff"])  # 999 = missing
+
+
+def _toy_bdc_events(rows):
+    cols = ["event_idx", "period", "clock_sec", "team", "event", "detail_1", "detail_2", "x_att", "y_att"]
+    ev = pd.DataFrame(rows, columns=cols)
+    ev["game_id"] = "2026_2025-10-11_A@B"
+    ev["season"] = 2026
+    ev["t_game"] = 1200 - ev["clock_sec"]
+    ev["opponent"] = np.where(ev["team"] == "A", "B", "A")
+    ev["team_id"] = "2026_" + ev["team"]
+    ev["is_home"] = (ev["team"] == "B").astype(int)
+    ev["player"] = "9"
+    ev["skaters_for"] = 5
+    ev["skaters_against"] = 5
+    ev["score_diff"] = 0
+    ev["detail_3"] = "t"
+    ev["detail_4"] = 0
+    return ev
+
+
+def test_xg_bdc_rebound_rule():
+    ev = _toy_bdc_events([
+        (0, 1, 1200, "A", "Faceoff Win", None, None, 0, 0),
+        (1, 1, 1100, "A", "Shot", "Wristshot", "On Net", 60, 10),   # first shot
+        (2, 1, 1099, "B", "Puck Recovery", None, None, 80, 0),       # Stathletes-only: ignored
+        (3, 1, 1098, "A", "Shot", "Snapshot", "Missed", 80, 0),      # rebound of 1 (2 s)
+        (4, 1, 1097, "A", "Shot", "Deflection", "Blocked", 85, 2),   # rebound of 3 (1 s), itself blocked
+        (5, 1, 1096, "A", "Goal", "Wristshot", None, 85, -3),         # NOT a rebound: previous shot was blocked
+        (6, 1, 1050, "B", "Shot", "Slapshot", "On Net", 50, -20),
+        (7, 1, 1046, "B", "Shot", "Wrap Around", "On Net", 90, 3),   # 4 s later: not a rebound
+    ])
+    shifts = pd.DataFrame(columns=["game_id", "team", "player", "period", "start_sec", "end_sec"])
+    s = xg.bdc_shot_features(ev, shifts).set_index("event_idx")
+    assert list(s["rebound"]) == [0, 1, 1, 0, 0, 0]
+    assert abs(s.loc[3, "rebound_angle_change"] - abs(0 - xg.shot_angle(60, 10))) < 1e-9
+    assert list(s["event_type"]) == ["SHOT", "MISS", "BLOCK", "GOAL", "SHOT", "SHOT"]
+    assert list(s["unblocked"]) == [1, 1, 0, 1, 1, 1]
+    assert list(s["shot_group"]) == ["wrist_snap", "wrist_snap", "tip", "wrist_snap", "slap", "wrap"]
+    assert s.loc[1, "time_since_faceoff"] == 100.0
+    assert list(s["traffic"]) == [1] * 6 and list(s["one_timer"]) == [0] * 6
+
+
+def test_xg_on_ice_toi():
+    shifts = pd.DataFrame({
+        "team": ["A", "A", "A", "A"], "player": ["9", "4", "Go", "7"], "period": [1, 1, 1, 1],
+        "start_sec": [1130, 1150, 1200, 1100], "end_sec": [1090, 1100, 0, 1050],
+    })
+    # At clock 1100: #9 on for 30 s, #4's shift ends exactly now (off), goalie excluded, #7 starts now (0 s).
+    assert sorted(xg.on_ice_toi(shifts, "A", 1, 1100)) == [0.0, 30.0]
+
+
+# ---------------------------------------------------------------------------
 # Cross-check on the real data: two independent builders must agree
 # ---------------------------------------------------------------------------
 
