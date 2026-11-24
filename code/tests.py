@@ -97,6 +97,17 @@ def test_game_label_both_name_styles():
     assert rows[0]["game"] == "2025:2025-10-11.Team.A.@.Team.B"  # no stray ".-"
 
 
+def test_failed_carry_labels_match_entry_labels():
+    # analyze_final.py joins failed carries to entries by game label, so both must agree
+    import failed_carries
+    for name in ("2025-2024-10-25.Team.H.@.Team.G.-.Events.csv", "2026-2025-10-11.Team.A.@.Team.D.Events.csv"):
+        rel = name[:4]
+        stem = name.split(".Events")[0]
+        stem = stem[:-2] if stem.endswith(".-") else stem
+        assert failed_carries.game_id(name, rel) == f"{rel}:{stem[5:]}"
+        assert not failed_carries.game_id(name, rel).endswith(".-")
+
+
 # ---------------------------------------------------------------------------
 # analyze.py
 # ---------------------------------------------------------------------------
