@@ -1,0 +1,30 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Rebuilt by code/build_entries.py and code/analyze.py in about a minute
+data/processed/
+output/
+
+# Large tracking files stay local (not in git)
+data/raw/tracking/
+*Tracking*.csv
+
+# LaTeX build files and compiled report
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.bbl
+*.blg
+report/main.pdf
+
+# OS clutter
+.DS_Store
+Thumbs.db
+desktop.ini

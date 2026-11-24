@@ -107,6 +107,8 @@ def main(entries_csv, out_dir, B=1000):
     point = pipeline(df, seed=0, keep_details=True)
     e, keep = point.pop("e"), point.pop("keep")
     placebo = pipeline(df, seed=0, outcome="y_pre")
+    has_own = "y_pre_own" in df.columns   # sensitivity placebo: entering team's shots only
+    placebo_own = pipeline(df, seed=0, outcome="y_pre_own") if has_own else None
 
     boot = cluster_bootstrap(df, B)
     stats = ["raw_all", "ratio_all", "raw_trim", "lin_ate"]
@@ -151,16 +153,21 @@ def main(entries_csv, out_dir, B=1000):
     json.dump(summary, open(f"{out_dir}/summary.json", "w"), indent=2, default=float)
 
     # placebo bootstrap CI (fewer resamples is fine)
-    pboot = []
+    pboot, pboot_own = [], []
     rng = np.random.default_rng(7); games = df.orig_game.unique()
     for b in range(min(B, 500)):
         draw = rng.choice(games, size=len(games), replace=True)
         bdf = pd.concat([df[df.orig_game == g] for g in draw], ignore_index=True)
         try:
             pboot.append(pipeline(bdf, seed=b, outcome="y_pre")["lin_ate"])
+            if has_own:   # same resample, so the two placebo intervals are comparable
+                pboot_own.append(pipeline(bdf, seed=b, outcome="y_pre_own")["lin_ate"])
         except ValueError:
             pass
     summary["placebo_ci"] = [np.percentile(pboot, 2.5), np.percentile(pboot, 97.5)]
+    if has_own:
+        summary["placebo_own_lin_ate"] = placebo_own["lin_ate"]
+        summary["placebo_own_ci"] = [np.percentile(pboot_own, 2.5), np.percentile(pboot_own, 97.5)]
     json.dump(summary, open(f"{out_dir}/summary.json", "w"), indent=2, default=float)
 
     # ---------- figure 1: overlap ----------
