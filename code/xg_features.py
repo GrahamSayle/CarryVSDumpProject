@@ -129,6 +129,7 @@ def moneypuck_features(mp):
         "mp_prev_shot_angle": mp["lastEventShotAngle"].astype(float),
         "mp_xGoal": mp["xGoal"].astype(float),  # MoneyPuck's own xG, kept as a benchmark
         "mp_shotOnEmptyNet": mp["shotOnEmptyNet"].astype(int),
+        "mp_playoff": mp["isPlayoffGame"].astype(int),  # train on regular season only
     })
     # Missing time-on-ice is coded as 999 (minimum) and 0 (maximum) in the files.
     for c in ["shoot_toi_min", "def_toi_min"]:
@@ -141,7 +142,7 @@ def moneypuck_features(mp):
     out["rebound_angle_change"] = np.where(
         out["rebound"] == 1, (out["angle"] - out["mp_prev_shot_angle"]).abs(), 0.0)
     out["toi_min_diff"] = out["shoot_toi_min"] - out["def_toi_min"]
-    return out[COMMON + ["mp_xGoal", "mp_shotOnEmptyNet"]]
+    return out[COMMON + ["mp_xGoal", "mp_shotOnEmptyNet", "mp_playoff"]]
 
 
 def load_moneypuck(path):

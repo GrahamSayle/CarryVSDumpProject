@@ -91,3 +91,11 @@ python code/xg_features.py bdc data/raw out/xg_bdc_shots.csv
 ```
 
 The MoneyPuck output keeps MoneyPuck's own `xGoal` as `mp_xGoal`, a ready-made benchmark for our model.
+
+## 7. Training and applying the models
+
+```
+python code/xg_train.py out/xg_mp_2021_2025.csv out/xg_bdc_shots.csv out    # about 2 minutes
+```
+
+Unblocked regular-season shots: train 2021–22 to 2024–25 (454,147 shots), test 2025–26 (112,011). The script fits three models (logistic on distance and angle, logistic on all shared features, LightGBM), then applies them to the 1,145 unblocked BDC shots. Results go to `out/xg_metrics.csv`, `out/xg_bdc_predictions.csv` and `out/fig_xg_calibration.png`.

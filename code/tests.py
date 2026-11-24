@@ -195,6 +195,7 @@ def test_xg_moneypuck_features_toy_row():
         "shootingTeamAverageTimeOnIce": 25.0, "shootingTeamMinTimeOnIce": 10, "shootingTeamMaxTimeOnIce": 40,
         "defendingTeamAverageTimeOnIce": 30.0, "defendingTeamMinTimeOnIce": 999, "defendingTeamMaxTimeOnIce": 0,
         "shotRebound": 1, "lastEventShotAngle": 11.309932474, "xGoal": 0.05, "shotOnEmptyNet": 0,
+        "isPlayoffGame": 0,
     }])
     f = xg.moneypuck_features(mp).iloc[0]
     assert (f["skaters_for"], f["skaters_against"], f["score_diff"]) == (5, 4, -1)  # away team shooting
