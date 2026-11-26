@@ -56,6 +56,7 @@ python code/analyze.py data/processed/entries.csv output 1000       # midway res
 | `code/build_entries.py` | Main pipeline, step 1: raw events + shifts -> one row per carried or dumped entry |
 | `code/analyze.py` | Main pipeline, step 2: raw gap, cross-fitted propensity and trimming, interacted regression (ATE), game bootstrap, leave-one-game-out, balance, placebo, figures |
 | `code/wrangle.py` | Event-level cleaner (coordinates rotated to the attacking direction) for later tracking / xG / zone-exit work, and an independent second entry builder |
+| `code/analyze_xg.py` | Same raw gap, interacted regression, double ML, placebos and sensitivity analysis with expected goals (xG) in the 20 s after the entry as the outcome, plus the xG version of the failed-carry break-even and decision-level gap; needs `entries.csv` and `failed_carries.csv` built with `xg_bdc_predictions.csv` (see `code/run_all.sh`) |
 | `code/tests.py` | Known-answer tests on small hand-built inputs, plus a check that the two entry builders agree on every real entry |
 
 `analyze.py` writes `output/results_table.csv`, `summary.json`, `per_game.csv`, `leave_one_game_out.csv`, `balance.csv`, `fig_overlap.png` and `fig_estimates.png`. A fresh run reproduces the midway table above exactly.
