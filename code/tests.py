@@ -86,6 +86,24 @@ def test_build_game_toy():
     assert b["home"] == 1
 
 
+def test_build_game_toy_xg_outcomes():
+    """y_xg sums the xG of exactly the shots counted in y; blocked shots (no xG) count 0."""
+    gid = "2026_2025-10-11_A@B"
+    xg = {(gid, 1): (0.50, 0.5), (gid, 2): (0.20, 0.2), (gid, 3): (0.10, 0.1),   # before A's entry
+          (gid, 5): (0.0, 0.0),                       # after A's entry, blocked: no xG
+          (gid, 6): (0.30, 0.3),                      # opponent's shot: not A's
+          (gid, 7): (0.40, 0.35),                     # A's goal
+          (gid, 8): (0.90, 0.9), (gid, 11): (0.70, 0.7)}  # outside the windows
+    with tempfile.TemporaryDirectory() as d:
+        ev_path = _toy_files(d)
+        rows = build_entries.build_game(str(ev_path), str(ev_path).replace("Events", "Shifts"), "2026", 20, xg)
+    a, b = rows
+    assert np.isclose(a["y_xg"], 0.40) and np.isclose(a["y_xg_logit"], 0.35)
+    assert np.isclose(a["y_pre_xg"], 0.30) and np.isclose(a["y_pre_own_xg"], 0.10)
+    assert (a["y_goals"], a["n_unblocked"]) == (1, 1)
+    assert (b["y_xg"], b["y_goals"]) == (0, 0)
+
+
 def test_game_label_both_name_styles():
     with tempfile.TemporaryDirectory() as d:
         ev_path = _toy_files(d)
